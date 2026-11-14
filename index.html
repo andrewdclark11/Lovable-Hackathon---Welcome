@@ -213,11 +213,11 @@ const M = {
 // ═══════════════════════════════════════════════════════════ water
 function proceduralWaterNormals() {                                         // tileable sum-of-sines fallback
   const S = 256, waves = [];
-  for (let i = 0; i < 30; i++) { const kx = Math.round(rand(-9, 9)), ky = Math.round(rand(-9, 9)); if (kx || ky) waves.push([kx, ky, rand(TAU), 1 / (Math.hypot(kx, ky) * 1.15)]); }
+  for (let i = 0; i < 44; i++) { const kx = Math.round(rand(-22, 22)), ky = Math.round(rand(-22, 22)); if (kx || ky) waves.push([kx, ky, rand(TAU), 1 / (Math.hypot(kx, ky) * 1.15)]); }
   return canvasTex(S, S, (g) => { const img = g.createImageData(S, S), n = new V3();
     for (let y = 0, o = 0; y < S; y++) for (let x = 0; x < S; x++, o += 4) {
       let dx = 0, dy = 0; for (const [kx, ky, p, a] of waves) { const c = Math.cos(TAU * (kx * x + ky * y) / S + p) * a; dx += c * kx; dy += c * ky; }
-      n.set(-dx * .3, -dy * .3, 1).normalize(); img.data[o] = (n.x * .5 + .5) * 255; img.data[o + 1] = (n.y * .5 + .5) * 255; img.data[o + 2] = (n.z * .5 + .5) * 255; img.data[o + 3] = 255;
+      n.set(-dx * .2, -dy * .2, 1).normalize(); img.data[o] = (n.x * .5 + .5) * 255; img.data[o + 1] = (n.y * .5 + .5) * 255; img.data[o + 2] = (n.z * .5 + .5) * 255; img.data[o + 3] = 255;
     } g.putImageData(img, 0, 0); }, false);
 }
 const waterBase = C(0x03191b), waterDark = C(0x000304), sunColBase = C(0xffc590);
@@ -459,7 +459,7 @@ function updateRipples(dt) { for (const r of ripples) { if (!r.m.visible) contin
 const MOTES = 520, mPos = new Float32Array(MOTES * 3), mSeed = new Float32Array(MOTES);
 for (let i = 0; i < MOTES; i++) { mPos[i * 3] = rand(-8, 8); mPos[i * 3 + 1] = rand(.4, 6); mPos[i * 3 + 2] = rand(-9, 7); mSeed[i] = rand(100); }
 const moteGeo = new THREE.BufferGeometry(); moteGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3));
-const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ map: softTex, size: 2.6, sizeAttenuation: false, color: new THREE.Color(2.4, 1.7, 1.0), transparent: true, opacity: .45, depthWrite: false, blending: THREE.AdditiveBlending }));
+const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ map: softTex, size: 2.2, sizeAttenuation: false, color: new THREE.Color(2.4, 1.6, .9), transparent: true, opacity: .3, depthWrite: false, blending: THREE.AdditiveBlending }));
 motes.frustumCulled = false; scene.add(motes);
 function updateMotes(dt, t) { for (let i = 0; i < MOTES; i++) { const o = i * 3, s = mSeed[i];
   mPos[o] += (.12 + Math.sin(t * .4 + s) * .08) * dt; mPos[o + 1] += Math.sin(t * .6 + s * 2) * .05 * dt; mPos[o + 2] += Math.cos(t * .3 + s) * .06 * dt;
@@ -658,14 +658,15 @@ function updateZombies(dt) {
   for (let i = zombies.length - 1; i >= 0; i--) { const Z = zombies[i], p = Z.root.position; Z.t += dt; Z.flinch = Math.max(0, Z.flinch - dt * 4); Z.lunge = Math.max(0, Z.lunge - dt * 2.5);
     Z.vis.update(dt * (Z.state === 'dying' ? Math.max(.05, 1 - Z.t * 1.4) : 1 - Z.flinch * .7));
     _a.set(Z.tgt.x - p.x, 0, Z.tgt.z - p.z); const dist = _a.length(); _a.normalize();
-    if (Z.state !== 'dying') Z.root.rotation.set(Z.state === 'attack' || Z.state === 'climb' ? .22 + Z.lunge * .35 : -Z.flinch * .25, Math.atan2(_a.x, _a.z), 0, 'YXZ');
+    const atHull = Z.state === 'attack' || Z.state === 'climb';                                           // at the hull they turn on the player
+    if (Z.state !== 'dying') Z.root.rotation.set(atHull ? .22 + Z.lunge * .35 : -Z.flinch * .25, atHull ? Math.atan2(P.x - p.x, P.z - p.z) : Math.atan2(_a.x, _a.z), 0, 'YXZ');
     if (Z.state === 'rise') { p.y = lerp(-2.5, WADE, ease(Math.min(1, Z.t / 3.4)));
       if (!Z.surfaced && p.y > -1.8) { Z.surfaced = true; burst('splash', p, 26); ripple(p.x, p.z, 3, 2.2); ripple(p.x, p.z, 1.8, 1.6); sfx.splash(.3); sfx.groan(.22); }
       if (Z.t > 3.4) Z.state = 'wade';
     } else if (Z.state === 'wade') { p.addScaledVector(_a, Math.min(dist, Z.speed * dt)); p.y = WADE + Math.sin(Z.t * 3) * .04;
       if (dist < .12) { Z.state = 'climb'; Z.t = 0; burst('splash', p, 14); sfx.splash(.3); }
     } else if (Z.state === 'climb') { p.y = lerp(WADE, -.12, ease(Math.min(1, Z.t / 1.4))) + boat.position.y; if (Z.t > 1.4) Z.state = 'attack';
-    } else if (Z.state === 'attack') { p.y = -.12 + boat.position.y; Z.atk -= dt; if (Z.atk <= 0) { Z.atk = 1.15; Z.lunge = 1; damage(9); sfx.groan(.2); }
+    } else if (Z.state === 'attack') { p.y = -.12 + boat.position.y; Z.atk -= dt; if (Z.atk <= 0) { Z.atk = 1.3; Z.lunge = 1; damage(7); sfx.groan(.2); }
     } else { Z.root.rotation.x = -Math.min(.7, Z.t * .9); Z.root.rotation.z = Math.sin(Z.t * 9) * .08 * Math.max(0, 1 - Z.t);          // stagger, then sink with bubbles
       if (Z.t > .8) { p.y -= .75 * dt; if (rand() < dt * 14) burst('bubble', _b.set(p.x, -.1, p.z), 1); if (Z.rip <= 0) { ripple(p.x, p.z, 1.6); Z.rip = .5; } }
       if (p.y < -3) { scene.remove(Z.root); zombies.splice(i, 1); continue; } }
