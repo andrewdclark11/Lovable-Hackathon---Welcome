@@ -327,10 +327,10 @@ function trunkGeo() {
   gg.setAttribute('color', new THREE.BufferAttribute(col, 3)); gg.computeVertexNormals(); return gg;
 }
 function canopyGeo(pine, seed) {                                            // layered, irregular, noise-displaced cone clusters
-  const parts = [], L = pine ? 7 : 10;
+  const parts = [], L = pine ? 7 : 9;
   for (let i = 0; i < L; i++) { const f = i / (L - 1); let g;
-    if (pine) { g = new THREE.ConeGeometry(rand(1.1, 1.7), rand(1.5, 2.3), 16, 4).rotateZ(rand(-.3, .3)).rotateX(rand(-.3, .3)).translate(i ? rand(-1, 1) : 0, 6.6 + f * 2.5 + rand(-.3, .3), i ? rand(-1, 1) : 0); }
-    else { const hh = lerp(2.7, 1.6, f); g = new THREE.ConeGeometry(lerp(2.1, .45, f) * rand(.85, 1.15), hh, 18, 4).rotateZ(rand(-.12, .12)).rotateY(rand(TAU)).translate(rand(-.15, .15), 1.6 + f * 6.6 + hh / 2, rand(-.15, .15)); }
+    if (pine) { g = new THREE.ConeGeometry(rand(1.1, 1.7), rand(1.5, 2.3), 13, 3).rotateZ(rand(-.3, .3)).rotateX(rand(-.3, .3)).translate(i ? rand(-1, 1) : 0, 6.6 + f * 2.5 + rand(-.3, .3), i ? rand(-1, 1) : 0); }
+    else { const hh = lerp(2.7, 1.6, f); g = new THREE.ConeGeometry(lerp(2.1, .45, f) * rand(.85, 1.15), hh, 14, 3).rotateZ(rand(-.12, .12)).rotateY(rand(TAU)).translate(rand(-.15, .15), 1.6 + f * 6.6 + hh / 2, rand(-.15, .15)); }
     parts.push(g); }
   const g = mergeGeometries(parts), p = g.attributes.position, col = new Float32Array(p.count * 3), v = new V3(), c = new THREE.Color();
   const dark = C(pine ? 0x243418 : 0x18301c), light = C(pine ? 0x7a9438 : 0x4f7c36);
@@ -695,7 +695,7 @@ for (let i = 0; i < TN; i++) {
   for (let s = 0; s < SUCK; s++) suckers.setMatrixAt(i * SUCK + s, ZERO_M);
 }
 { // head + glowing amber eye (the weak point)
-  const head = new THREE.Group(); head.position.set(3, -11, -35); head.rotation.y = Math.atan2(-3, 35); scene.add(head);   // parked under the (opaque) water until summoned K.head = head;
+  const head = new THREE.Group(); head.position.set(3, -11, -35); head.rotation.y = Math.atan2(-3, 35); scene.add(head); K.head = head;   // parked under the (opaque) water until summoned
   let g = new THREE.IcosahedronGeometry(1, 14); g.deleteAttribute('normal'); g.deleteAttribute('uv'); g = mergeVertices(g, 1e-5);
   const p = g.attributes.position, col = new Float32Array(p.count * 3), v = new V3(), c = new THREE.Color(), SC = new V3(5.5, 4.4, 6.5), bump = v => 1 + (fbm(v.x * 2.2 + 5, v.y * 2.2, v.z * 2.2, 4) - .45) * .34;
   for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const r = bump(v), n = fbm(v.x * 5, v.y * 5, v.z * 5, 3);
