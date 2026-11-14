@@ -420,7 +420,7 @@ pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3)); pGeo.setAttri
 const pUni = { uScale: { value: 600 } };
 const points = new THREE.Points(pGeo, new THREE.ShaderMaterial({ uniforms: pUni, transparent: true, depthWrite: false,
   vertexShader: `attribute vec4 aColor; attribute float aSize; uniform float uScale; varying vec4 vC;
-    void main(){ vC = aColor; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = aSize * uScale / max(0.1, -mv.z); gl_Position = projectionMatrix * mv; }`,
+    void main(){ vC = aColor; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = min(aSize * uScale / max(0.1, -mv.z), 26.0); gl_Position = projectionMatrix * mv; }`,
   fragmentShader: `varying vec4 vC; void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.18, d) * vC.a; if (a < 0.01) discard; gl_FragColor = vec4(vC.rgb, a); }` }));
 points.frustumCulled = false; points.renderOrder = 5; scene.add(points);
 function emit(x, y, z, vx, vy, vz, r, g, b, a, size, life, grav, drag = 0, mode = 0) {   // mode 1: dies entering water, 2: dies leaving it
@@ -751,7 +751,7 @@ function updateKraken(dt, rdt, t) {
   } else if (K.phase === 'fight') { head.position.y = Math.sin(t * .8) * .18; K.atk -= dt;
     if (K.atk <= 0) { const idle = K.tentacles.filter(T => T.state === 'idle' && T.e > .9); if (idle.length) { const T = idle[Math.floor(rand(idle.length))]; T.state = 'windup'; T.t = 0; sfx.groan(.22); } K.atk = K.hp < K.maxHp / 2 ? 2.5 : 3.3; }
   } else if (K.phase === 'dying') { head.position.y -= 1.5 * dt; if (head.position.y > -9 && rand() < dt * 40) burst('bubble', _a.set(head.position.x + rand(-4, 4), -.1, head.position.z + rand(-4, 5)), 2);
-    timeScale = lerp(timeScale, .32, Math.min(1, rdt * 2)); if (K.t > 1.6) $('fade').style.opacity = clamp((K.t - 1.6) / 1.6, 0, .55);
+    timeScale = lerp(timeScale, .32, Math.min(1, rdt * 2)); if (K.t > 1.6) $('fade').style.opacity = clamp((K.t - 1.6) / 1.6, 0, .28);
     if (K.t > 2.4 && state === 'play') endGame('won'); }
   K.eyeFlash = Math.max(0, K.eyeFlash - dt * 5); const alive = K.phase === 'dying' ? Math.max(0, 1 - K.t * 1.2) : 1;
   K.eye.material.color.setScalar((2.6 + K.eyeFlash * 7 + Math.sin(t * 2.3) * .3) * alive); K.light.intensity = 160 * alive * (head.position.y > -6 ? 1 : 0);
