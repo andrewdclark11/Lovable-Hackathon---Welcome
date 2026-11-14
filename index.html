@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Skärgård Siege</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, sans-serif; color: #fff; }
+  canvas { display: block; }
+  #hud { position: fixed; top: 12px; left: 16px; font-size: 18px; font-weight: 600; text-shadow: 0 1px 3px #000; }
+  #hud span { margin-right: 18px; }
+  #cross { position: fixed; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; pointer-events: none; }
+  #cross::before, #cross::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 2px #000; }
+  #cross::before { left: 8px; top: 0; width: 2px; height: 18px; }
+  #cross::after { left: 0; top: 8px; width: 18px; height: 2px; }
+  #boss { position: fixed; top: 48px; left: 50%; transform: translateX(-50%); width: 50vw; display: none; text-align: center; font-weight: 700; text-shadow: 0 1px 3px #000; }
+  #bossBar { height: 14px; margin-top: 4px; border: 2px solid #fff; background: #0006; }
+  #bossFill { height: 100%; width: 100%; background: #a3f; }
+  #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000a; text-align: center; cursor: pointer; }
+  #overlay h1 { font-size: 56px; margin: 0 0 12px; }
+  #overlay p { font-size: 20px; margin: 4px; }
+  #hurt { position: fixed; inset: 0; background: #f00; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="hud"><span id="hp"></span><span id="wave"></span><span id="kills"></span></div>
+<div id="cross"></div>
+<div id="boss">KRAKEN<div id="bossBar"><div id="bossFill"></div></div></div>
+<div id="hurt"></div>
+<div id="overlay"><h1 id="title">SKÄRGÅRD SIEGE</h1><p id="sub">Zombies rise from the water. Then the Kraken comes.</p><p>Click to start · mouse to aim · click to shoot</p></div>
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+const $ = id => document.getElementById(id);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xff8a6b);
+scene.fog = new THREE.Fog(0xff8a6b, 150, 450);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 500);
+camera.position.set(0, 2.2, 0);
+camera.rotation.order = 'YXZ';
+scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+const sun = new THREE.DirectionalLight(0xffe0c0, 1.2);
+sun.position.set(-30, 20, -60);
+scene.add(sun);
+
+const mat = color => new THREE.MeshLambertMaterial({ color });
+const box = (w, h, d, color) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+
+const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), mat(0x12305c));
+water.rotation.x = -Math.PI / 2;
+scene.add(water);
+const boat = box(3, 1, 7, 0xffffff);
+boat.position.y = 0.5;
+scene.add(boat);
+[[-90, 14, -170, 70], [20, 20, -200, 90], [120, 10, -160, 50]].forEach(([x, h, z, w]) => {
+  const isle = box(w, h, 30, 0x2e7d32);
+  isle.position.set(x, h / 2, z);
+  scene.add(isle);
+});
+
+// ---- state ----
+const WAVES = [4, 6, 8];
+let state = 'menu', hp, kills, wave, zombies, waveDelay, kraken, endedAt = 0;
+const flashing = new Set();
+const ray = new THREE.Raycaster();
+
+function flash(mesh) {
+  mesh.material.emissive.setHex(0xff0000);
+  mesh.userData.flash = 0.12;
+  flashing.add(mesh);
+}
+
+function spawnWave(n) {
+  for (let i = 0; i < n; i++) {
+    const z = box(1, 2, 1, 0x4caf50);
+    const a = (Math.random() - 0.5) * Math.PI * 0.9, d = 30 + Math.random() * 20;
+    z.position.set(Math.sin(a) * d, -1.5, -Math.cos(a) * d);
+    scene.add(z);
+    zombies.push(z);
+  }
+}
+
+function spawnKraken() {
+  const group = new THREE.Group();
+  group.position.set(0, -16, -40);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(5, 24, 16), mat(0x7b1fa2));
+  head.position.y = 4;
+  group.add(head);
+  const tentacles = [];
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI / 4 + i * Math.PI / 2;
+    const pivot = new THREE.Group();
+    pivot.position.set(Math.cos(a) * 9, 0, Math.sin(a) * 6);
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1, 12, 10), mat(0x9c27b0));
+    mesh.position.y = 6;
+    pivot.add(mesh);
+    group.add(pivot);
+    tentacles.push({ pivot, mesh });
+  }
+  scene.add(group);
+  kraken = { group, head, tentacles, hp: 30, risen: false, dead: false, timer: 3, attack: null };
+  $('boss').style.display = 'block';
+}
+
+function reset() {
+  if (zombies) zombies.forEach(z => scene.remove(z));
+  if (kraken) scene.remove(kraken.group);
+  hp = 100; kills = 0; wave = 0; zombies = []; waveDelay = 1; kraken = null;
+  $('boss').style.display = 'none';
+  $('bossFill').style.width = '100%';
+  camera.rotation.set(0, 0, 0);
+}
+
+function end(result) {
+  state = result;
+  endedAt = performance.now();
+  document.exitPointerLock();
+  $('title').textContent = result === 'win' ? 'YOU WIN' : 'GAME OVER';
+  $('sub').textContent = `Kills: ${kills}`;
+  $('overlay').style.display = 'flex';
+}
+
+function damage(n) {
+  hp = Math.max(0, hp - n);
+  $('hurt').style.opacity = 0.4;
+  if (hp <= 0) end('over');
+}
+
+function shoot() {
+  ray.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const targets = [...zombies];
+  if (kraken) targets.push(kraken.head, ...kraken.tentacles.map(t => t.mesh));
+  const hit = ray.intersectObjects(targets)[0];
+  if (!hit) return;
+  const obj = hit.object;
+  flash(obj);
+  const zi = zombies.indexOf(obj);
+  if (zi >= 0) {
+    zombies.splice(zi, 1);
+    kills++;
+    setTimeout(() => { scene.remove(obj); flashing.delete(obj); }, 100);
+  } else if (kraken && !kraken.dead && kraken.risen) {
+    if (obj === kraken.head) {
+      kraken.hp--;
+      $('bossFill').style.width = (kraken.hp / 30 * 100) + '%';
+      if (kraken.hp <= 0) { kraken.dead = true; kraken.attack = null; kills++; }
+    } else if (kraken.attack && kraken.attack.t.mesh === obj) {
+      if (++kraken.attack.hits >= 3) kraken.attack = null;
+    }
+  }
+}
+
+// ---- input ----
+addEventListener('mousedown', () => {
+  if (state !== 'play') {
+    if (performance.now() - endedAt < 700) return;
+    reset();
+    state = 'play';
+    $('overlay').style.display = 'none';
+    renderer.domElement.requestPointerLock();
+    return;
+  }
+  if (document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock();
+  shoot();
+});
+let lockedAt = 0;
+document.addEventListener('pointerlockchange', () => { lockedAt = performance.now(); });
+addEventListener('mousemove', e => {
+  if (state !== 'play' || document.pointerLockElement !== renderer.domElement) return;
+  if (performance.now() - lockedAt < 150) return; // browsers can report a bogus jump right after locking
+  camera.rotation.y -= e.movementX * 0.002;
+  camera.rotation.x = Math.max(-1.2, Math.min(1.2, camera.rotation.x - e.movementY * 0.002));
+});
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---- update ----
+function updateZombies(dt) {
+  for (let i = zombies.length - 1; i >= 0; i--) {
+    const z = zombies[i];
+    if (z.position.y < 1) z.position.y = Math.min(1, z.position.y + 2 * dt);
+    const d = Math.hypot(z.position.x, z.position.z);
+    if (d < 2.5) {
+      scene.remove(z);
+      zombies.splice(i, 1);
+      damage(10);
+      if (state !== 'play') return;
+      continue;
+    }
+    z.position.x -= z.position.x / d * 3.5 * dt;
+    z.position.z -= z.position.z / d * 3.5 * dt;
+    z.lookAt(0, z.position.y, 0);
+  }
+  if (!zombies.length) {
+    waveDelay -= dt;
+    if (waveDelay <= 0) {
+      waveDelay = 1.5;
+      if (wave < WAVES.length) spawnWave(WAVES[wave++]);
+      else spawnKraken();
+    }
+  }
+}
+
+function updateKraken(dt) {
+  const k = kraken;
+  if (k.dead) {
+    k.group.position.y -= 5 * dt;
+    if (k.group.position.y < -18) end('win');
+    return;
+  }
+  if (!k.risen) {
+    k.group.position.y = Math.min(0, k.group.position.y + 6 * dt);
+    k.risen = k.group.position.y >= 0;
+    return;
+  }
+  if (k.attack) {
+    k.attack.time -= dt;
+    if (k.attack.time <= 0) { k.attack = null; damage(20); }
+  } else {
+    k.timer -= dt;
+    if (k.timer <= 0) {
+      k.timer = 3;
+      k.attack = { t: k.tentacles[Math.floor(Math.random() * 4)], hits: 0, time: 2 };
+    }
+  }
+  for (const t of k.tentacles) {
+    const target = k.attack && k.attack.t === t ? 0.8 : 0;
+    t.pivot.rotation.x += (target - t.pivot.rotation.x) * Math.min(1, 6 * dt);
+  }
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (state === 'play') {
+    if (kraken) updateKraken(dt);
+    else updateZombies(dt);
+  }
+  for (const m of flashing) {
+    if ((m.userData.flash -= dt) <= 0) { m.material.emissive.setHex(0); flashing.delete(m); }
+  }
+  const hurt = $('hurt');
+  if (hurt.style.opacity > 0) hurt.style.opacity = Math.max(0, hurt.style.opacity - dt * 1.5);
+  $('hp').textContent = `HP ${hp ?? 100}`;
+  $('wave').textContent = kraken ? 'KRAKEN' : `WAVE ${Math.max(1, wave || 1)}/3`;
+  $('kills').textContent = `KILLS ${kills ?? 0}`;
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
