@@ -110,7 +110,7 @@ const skyU = sky.material.uniforms;
 skyU.turbidity.value = 9; skyU.rayleigh.value = 3.4; skyU.mieCoefficient.value = 0.005; skyU.mieDirectionalG.value = 0.9;
 // grade the sky inside its own shader (amber at the horizon, violet overhead) so the PMREM, fog and water all inherit it
 sky.material.fragmentShader = sky.material.fragmentShader.replace('gl_FragColor = vec4( retColor, 1.0 );',
-  `retColor *= mix( vec3( 1.3, 0.8, 0.44 ), vec3( 0.5, 0.46, 1.0 ), smoothstep( 0.015, 0.42, direction.y ) ) * 0.58;
+  `retColor *= mix( vec3( 1.3, 0.8, 0.44 ), vec3( 0.56, 0.5, 1.0 ), smoothstep( 0.015, 0.45, direction.y ) ) * 0.74;
    gl_FragColor = vec4( retColor, 1.0 );`);
 skyU.sunPosition.value.copy(sunDir);
 const envScene = new THREE.Scene(); envScene.add(sky);
@@ -142,7 +142,7 @@ const sun = new THREE.DirectionalLight(0xffb078, SUN_I);
 sun.position.copy(sunDir).multiplyScalar(220); sun.target.position.set(0, 0, -4); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05;
 Object.assign(sun.shadow.camera, { left: -44, right: 44, top: 24, bottom: -5, near: 20, far: 470 });
-const hemi = new THREE.HemisphereLight(0x9a96e0, 0x4a3a30, HEMI_I);
+const hemi = new THREE.HemisphereLight(0xa9a8cc, 0x4a3a30, HEMI_I);
 scene.add(sun, sun.target, hemi);
 
 // ═══════════════════════════════════════════════════════════ post-processing
@@ -459,7 +459,7 @@ function updateRipples(dt) { for (const r of ripples) { if (!r.m.visible) contin
 const MOTES = 520, mPos = new Float32Array(MOTES * 3), mSeed = new Float32Array(MOTES);
 for (let i = 0; i < MOTES; i++) { mPos[i * 3] = rand(-8, 8); mPos[i * 3 + 1] = rand(.4, 6); mPos[i * 3 + 2] = rand(-9, 7); mSeed[i] = rand(100); }
 const moteGeo = new THREE.BufferGeometry(); moteGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3));
-const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ map: softTex, size: .016, color: new THREE.Color(2.4, 1.7, 1.0), transparent: true, opacity: .5, depthWrite: false, blending: THREE.AdditiveBlending }));
+const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ map: softTex, size: 2.6, sizeAttenuation: false, color: new THREE.Color(2.4, 1.7, 1.0), transparent: true, opacity: .45, depthWrite: false, blending: THREE.AdditiveBlending }));
 motes.frustumCulled = false; scene.add(motes);
 function updateMotes(dt, t) { for (let i = 0; i < MOTES; i++) { const o = i * 3, s = mSeed[i];
   mPos[o] += (.12 + Math.sin(t * .4 + s) * .08) * dt; mPos[o + 1] += Math.sin(t * .6 + s * 2) * .05 * dt; mPos[o + 2] += Math.cos(t * .3 + s) * .06 * dt;
@@ -610,7 +610,7 @@ let SOLDIER = null; const zMats = new Map();
 function zMat(src) {                                                        // waterlogged corpse restyle of the Soldier material
   if (!zMats.has(src)) { const m = phys({ map: src.map || null, normalMap: src.normalMap || null, color: 0xffffff, roughness: .5, clearcoat: 1, clearcoatRoughness: .14 });
     m.onBeforeCompile = s => { s.fragmentShader = s.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
-      float zl = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)); diffuseColor.rgb = mix(vec3(zl), diffuseColor.rgb, 0.18) * vec3(0.5, 0.66, 0.55) + vec3(0.012, 0.03, 0.02);`); };
+      float zl = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)); diffuseColor.rgb = mix(vec3(zl), diffuseColor.rgb, 0.18) * vec3(0.3, 0.43, 0.34) + vec3(0.006, 0.016, 0.01);`); };
     zMats.set(src, m); }
   return zMats.get(src);
 }
@@ -690,7 +690,7 @@ for (let i = 0; i < TN; i++) {
   for (let s = 0; s <= TS; s++) for (let j = 0; j <= TR; j++) { const o = (s * (TR + 1) + j) * 3; c.copy(fTop).lerp(fUnder, sstep(Math.cos(j / TR * TAU), .15, .9)).multiplyScalar(.8 + .4 * noise3(s * .5, j * .9, i * 7)); col[o] = c.r; col[o + 1] = c.g; col[o + 2] = c.b; }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.boundingSphere = new THREE.Sphere(new V3(base.x, 3, base.z), 24);
   const m = mesh(scene, geo, fleshMat.clone()); m.frustumCulled = false; m.castShadow = true; m.visible = false;
-  const T = { i, base, d, q: new V3(d.z, 0, -d.x), D, pts, curve, geo, mesh: m, R: rand(.5, .62), H: rand(8, 10), ph: rand(TAU), state: 'hidden', e: 0, ww: 0, sw: 0, lw: 0, t: 0, hits: 0, cool: 0, struck: false, flash: 0, rip: 0 };
+  const T = { i, base, d, q: new V3(d.z, 0, -d.x), D, pts, curve, geo, mesh: m, R: rand(.8, .95), H: rand(8.5, 10.5), ph: rand(TAU), state: 'hidden', e: 0, ww: 0, sw: 0, lw: 0, t: 0, hits: 0, cool: 0, struck: false, flash: 0, rip: 0 };
   m.userData = { kind: 'tentacle', ref: T }; K.tentacles.push(T);
   for (let s = 0; s < SUCK; s++) suckers.setMatrixAt(i * SUCK + s, ZERO_M);
 }
@@ -716,8 +716,8 @@ const _P = new V3(), _T = new V3(), _N = new V3(), _B = new V3(), _D = new V3(),
 function poseTentacle(T, t) {                                               // animate the 6 control points of the CatmullRom spine
   const wr = Math.max(0, 1 - T.ww - T.sw), E = ease(clamp(T.e, 0, 1)), sway = (1 - T.sw) * (1 - T.lw * .85);
   for (let k = 0; k < 6; k++) { const s = k / 5, s15 = Math.pow(s, 1.5);
-    let dd = wr * (-1.3 * Math.sin(s * PI) + 2.4 * s * s * s) + T.ww * (-3.6 * s * s + 2.2 * Math.pow(s, 5)) + T.sw * (T.D * s * 1.02);
-    let y = wr * (s * (T.H + 2.5)) + T.ww * (s * (T.H * 1.2 + 2.5)) + T.sw * (s * (BOAT_TGT.y + 2.5) + Math.sin(s * PI) * T.H * .44);
+    let dd = wr * (-2.3 * Math.sin(s * PI) + 4.2 * s * s * s) + T.ww * (-3.6 * s * s + 2.2 * Math.pow(s, 5)) + T.sw * (T.D * s * 1.02);
+    let y = wr * (s * (T.H + 2.5) - 1.8 * s * s * s * s) + T.ww * (s * (T.H * 1.2 + 2.5)) + T.sw * (s * (BOAT_TGT.y + 2.5) + Math.sin(s * PI) * T.H * .44);
     dd = lerp(dd, -5.5 * s, T.lw); y = lerp(y, 2.75 * Math.min(1, s * 3), T.lw);
     const qq = (Math.sin(t * .9 + T.ph + s * 2.2) * 1.25 * s15 + Math.sin(t * 31 + k) * .07 * T.ww * s) * sway; dd += Math.sin(t * .7 + T.ph * 2 + s * 1.7) * .7 * s15 * sway;
     T.pts[k].set(T.base.x + (T.d.x * dd + T.q.x * qq) * E, lerp(-3.2 - s * .5, -2.5 + y, E), T.base.z + (T.d.z * dd + T.q.z * qq) * E); }
